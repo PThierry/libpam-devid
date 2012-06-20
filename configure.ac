@@ -121,7 +121,7 @@ else
 fi
 
 CFLAGS="$CFLAGS \
- -O2 -Wall -Wextra -W -Werror -Wtrigraphs -Wundef -Wswitch -Wunused \
+ -std=c99 -O2 -Wall -Wextra -W -Werror -Wtrigraphs -Wundef -Wswitch -Wunused \
  -Wimplicit -fno-common -Wcast-qual -Wcast-align -Wwrite-strings \
  -Wuninitialized -Winit-self -Wmissing-prototypes -Wpacked -Wnested-externs \
  -Waggregate-return -pedantic -Wshadow -O3 \
