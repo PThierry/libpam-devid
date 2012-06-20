@@ -51,6 +51,7 @@ static void parse_pam_args(pam_handle_t *pamh, int argc, const char **argv)
 
   /* first, set default values */
   pam_args.get_uid_from_pam    = true;
+  pam_args.pam_debug               = true;
 
   for (i = 0; i < argc; ++i) {
     if (strcasecmp("enable_pam_user", argv[i]) == 0)
@@ -82,6 +83,9 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh __attribute__((unused)),
   parse_pam_args(pamh, argc, argv);
   ret = pam_get_item(pamh, PAM_USER,  (const void **)&name);
   pam_syslog(pamh, LOG_ERR, "foo");
+  if (name) {
+    pam_syslog(pamh, LOG_ERR, "user %s session opened", name);
+  }
   return 0;
 }
 
