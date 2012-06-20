@@ -20,13 +20,9 @@ pam_devid_la_CFLAGS = ${AM_CFLAGS}
 pam_devid_la_LDFLAGS = -module -avoid-version
 
 
-AM_CFLAGS = -I$(top_srcdir)/src/lib/utils -I$(top_srcdir)/src/lib/string -I$(top_srcdir)/src/lib/list -I$(top_srcdir)/src/lib/memtrace -I$(top_srcdir)/src/lib/debug $(CFLAGS)
-
-pam_devid_la_SOURCES = main.c
-
 # options part
 if EFENCE
-pam_devid_LDADD += $(EFENCEFLAGS)
+pam_devid_la_LIBADD = $(EFENCEFLAGS)
 endif
 #
 
