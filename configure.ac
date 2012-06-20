@@ -135,6 +135,22 @@ AM_CONDITIONAL(EFENCE, test x$efence = xyes)
 AM_CONDITIONAL(GCOV, test x$gcov = xyes)
 AM_CONDITIONAL(GPROF, test x$gprof = xyes)
 
+case "$host" in
+    (*-*-linux*|*-*-openbsd*)
+	PAM_MODDIR='${slibdir}/security'
+	;;
+    (*-*-solaris*|*-*-netbsd*)
+	PAM_MODDIR='${libdir}/security';
+	;;
+    (*-*-darwin*)
+	PAM_MODDIR='${libdir}/pam';
+	;;
+    (*)
+	PAM_MODDIR='${libdir}';
+	;;
+esac
+AC_SUBST([PAM_MODDIR])
+
 #############################################################################
 ## Makefile list and finish
 #############################################################################
