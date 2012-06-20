@@ -18,6 +18,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 /* for ldap */
 #include <ldap.h>
 
@@ -34,6 +37,8 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
 struct pam_args {
   bool get_uid_from_pam;
   bool pam_debug;
+  bool pam_conf;
+  int  min_uid;
 };
 
 /* ldap part. Needed for LDAP server configuration, to be supported through configuration */
@@ -52,7 +57,7 @@ const char *ldap_attributes[] = {
   NULL
 };
 
-/* FIXME: before getting from pam env */
+/* FIXME: before getting from pam env, to be replaced by config file */
 union u_foo {
   const char **const_attr;
   char **attr;
@@ -61,14 +66,61 @@ union u_foo {
 /* pam args structure for argument management */
 struct pam_args pam_args;
 
+/* module configuration structure, loaded from file given in mod arg or in /etc/pam_devid.conf if not given */
 /*!
- ** @brief request_devid_from_ldap
+ ** @brief  the PAM devid module configuration structure
+ */
+struct pam_devid_conf {
+  char *ldap_uri; /**< the LDAP server URI */
+  char *ldap_root_dn; /**< the LDAP server root dn */
+  char *ldap_base_dn; /**< The LDAP server base dn */
+  char *ldap_root_pw; /**< the LDAP root passwd */
+};
+
+/*
+** By now the devid conf structure is a global variable, loaded at open_session() call.
+** The module as NO MEMORY from a call to another by now. Set to NULL when
+** loaded.
+*/
+struct pam_devid_conf devid_conf = {
+  NULL, NULL, NULL, NULL
+};
+
+
+/*!
+ ** @brief load_configuration load the module configuration from module's config file
+ **
+ ** FIXME: loading the config file should be done here
  ** 
- ** @param pamh 
- ** @param argc
- ** @param argv
+ ** @param file the file full path 
+ */
+static void load_configuration(pam_handle_t *pamh,
+                               const char *file)
+{
+  int fd;
+  fd = open(file, O_RDONLY);
+  if (fd != -1) {
+    if (pam_args.pam_debug == true) {
+      pam_syslog(pamh, LOG_INFO, "Opened config file %s", file);
+    }
+
+  } else {
+    pam_syslog(pamh, LOG_ERR, "Unable to open pam_devid config file!");
+  }
+}
+
+/*!
+ ** @brief request_devid_from_ldap gets the list of devid in the LDAP database
+ **
+ ** All these devid are serialid stored in the LDAP database and are used to
+ ** set them in the local device firewall as a whitelist. Any preexisting list
+ ** is cleaned (one user devids at a time in the whitelist by now)
  ** 
- ** @return 0
+ ** @param pamh PAM module handler
+ ** @param argc the module's argc
+ ** @param argv the module's argv
+ ** 
+ ** @return  always 0 by now
  */
 static int request_devid_from_ldap(pam_handle_t *pamh,
                                    char *name,
@@ -127,16 +179,25 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
                           NULL, NULL, /* no SSL */
                           12 /* max entries*/,
                           &msg);
+  /* count the number of returned entry (should be one - the user data)*/
   if (ldap_count_entries(ld, msg) == 0) {
     pam_syslog(pamh, LOG_ERR, "no entry found!");
   } else {
     LDAPMessage *entry = NULL;
     entry = ldap_first_entry(ld, msg);
+    /* get the entry content */
     if (entry) {
       struct berval **entryval;
       entryval = ldap_get_values_len(ld, entry, "uidNumber");
       if (entryval) {
-        pam_syslog(pamh, LOG_ERR, "uid found for user %s: %s", name, entryval[0]->bv_val);
+        pam_syslog(pamh, LOG_INFO, "uid found for user %s: %s", name, entryval[0]->bv_val);
+        if (strtol(entryval[0]->bv_val, NULL, 10) < pam_args.min_uid) {
+          if (pam_args.pam_debug == true) {
+            pam_syslog(pamh, LOG_INFO, "uid (%s) smaller than minimum requested (%d)", entryval[0]->bv_val, pam_args.min_uid);
+          }
+          free(ldap_filter);
+          return 0;
+        }
       }
     } else {
       pam_syslog(pamh, LOG_ERR, "entry is NULL!");
@@ -155,11 +216,19 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
   return 0;
 }
 
+
 /*!
- ** @brief parse_pam_args
- ** 
- ** @param argc 
- ** @param argv 
+ ** @brief parse_pam_args parse the pam module arguments
+ **
+ ** List of arguments:
+ ** - enable_pam_user: future use
+ ** - debug: enable full debug. If not present, no debug printed in auth.log
+ ** - config: set the config file (config=/path/to/config). If not set, config file /etc/pam_devid.conf is used)
+ ** - min_uid: set the minimum uid for each we have to get back the list of devid (mmin_uid=NUM). Default: 999. 
+ **
+ ** @param pamh the PAM module handler, for pam_syslog
+ ** @param argc the module argc
+ ** @param argv the module argv
  */
 static void parse_pam_args(pam_handle_t *pamh, int argc, const char **argv)
 {
@@ -171,15 +240,31 @@ static void parse_pam_args(pam_handle_t *pamh, int argc, const char **argv)
 
   /* first, set default values */
   pam_args.get_uid_from_pam    = true;
-  pam_args.pam_debug               = false;
+  pam_args.pam_debug           = false;
+  pam_args.pam_conf            = false;
+  pam_args.min_uid	       = 999;
 
   for (i = 0; i < argc; ++i) {
     if (strcasecmp("enable_pam_user", argv[i]) == 0)
       pam_args.get_uid_from_pam = true;
     else if (strcasecmp("debug", argv[i]) == 0)
       pam_args.pam_debug = true;
-    else
+    /* get conf file ... */
+    if (strncmp("config=", argv[i], 7) == 0 && strlen(argv[i]) > 7) {
+      load_configuration(pamh, &(argv[i][7])); /* ... and load */
+      pam_args.pam_conf = true;
+    } else {
       pam_syslog(pamh, LOG_ERR, "unknown pam_devid option \"%s\"\n", argv[i]);
+    }
+    /* get min uid */
+    if (strncmp("min_uid=", argv[i], 8) == 0 && strlen(argv[i]) > 8) {
+      pam_args.min_uid = strtol(&(argv[i][8]), NULL, 10);
+    } else {
+      pam_syslog(pamh, LOG_ERR, "unknown pam_devid option \"%s\"\n", argv[i]);
+    }
+  }
+  if (pam_args.pam_conf == false) {
+    load_configuration(pamh, "/etc/pam_devid.conf"); /* ... and load */
   }
 }
 
@@ -191,9 +276,9 @@ static void parse_pam_args(pam_handle_t *pamh, int argc, const char **argv)
  ** @param argc the module's arguments list counter 
  ** @param argv the module's arguments list
  ** 
- ** @return 
+ ** @return always 0 for the moment
  */
-PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh __attribute__((unused)),
+PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
                                    int          flags __attribute__((unused)),
                                    int          argc __attribute__((unused)),
                                    const char** argv __attribute__((unused)))
@@ -220,12 +305,12 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh __attribute__((unused)),
  ** @param argc the module's arguments list counter 
  ** @param argv the module's arguments list
  ** 
- ** @return 0
+ ** @return always 0 for the moment
  */
-PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh __attribute__((unused)),
-                                   int          flags __attribute__((unused)),
-                                   int          argc __attribute__((unused)),
-                                   const char** argv __attribute__((unused)))
+PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
+                                    int          flags __attribute__((unused)),
+                                    int          argc __attribute__((unused)),
+                                    const char** argv __attribute__((unused)))
 {
   char *name;
   int ret __attribute__((unused));
