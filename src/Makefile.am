@@ -18,11 +18,11 @@ module_LTLIBRARIES = pam_devid.la
 pam_devid_la_SOURCES = pam_devid.c
 pam_devid_la_CFLAGS = ${AM_CFLAGS}
 pam_devid_la_LDFLAGS = -module -avoid-version
-
+pam_devid_la_LIBADD =  -lldap
 
 # options part
 if EFENCE
-pam_devid_la_LIBADD = $(EFENCEFLAGS)
+pam_devid_la_LIBADD += $(EFENCEFLAGS)
 endif
 #
 
