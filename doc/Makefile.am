@@ -18,4 +18,3 @@ doc:
 EXTRA_DIST = Doxyfile
 
 CLEANFILES = *~ .*.swp .*.swo output* *.gcov *.gprof
-

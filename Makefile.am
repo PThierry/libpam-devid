@@ -8,7 +8,12 @@
 ## Last update mer. 20 juin 2012 15:30:10 CEST Philippe THIERRY
 ##
 
-SUBDIRS = src .
+SUBDIRS = src doc .
+
+doc:
+	$(MAKE) -C doc doc
+
+.PHONY: doc
 
 EXTRA_DIST = 
 

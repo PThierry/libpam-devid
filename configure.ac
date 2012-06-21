@@ -157,6 +157,7 @@ AC_SUBST([PAM_MODDIR])
 
 AC_CONFIG_FILES([
 Makefile
+doc/Makefile
 src/Makefile
 ])
 
