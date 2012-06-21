@@ -1,0 +1,54 @@
+  ~~~~~~~~~~~~ PAM DEVID SUBMODULE ~~~~~~~~~~~~~
+
+PREAMBLE
+
+The goal of this PAM module is to support dynamic device filtering
+depending on a per-user centralized authorized device list.
+
+When a user log in, this module get back the list of the authorized
+devices (a serial id list) from LDAP, and inject this list in the
+kernel in order to reduce authorized external devices to this list
+only.
+When the user log out, the device list is cleaned.
+
+If two users are connected in the same time on the host, the device list
+is the one of the last connected user. It is considered that only
+one local user at a time is supported.
+
+ACTIVATION
+
+This module need to be added into pam session management for local authen-
+tication client (like login).
+It is done by adding the following line into the corresponding pam configu-
+ration file (e.g. /etc/pam.d/login) :
+----------8<----------
+optional pam_devid.so
+---------->8----------
+
+Optional meens that if the module fails, the user is not disconnected from
+the host. If the module fails, then no key is added.
+
+MODULE OPTION
+
+This module support the following command line option:
+- debug: specify if the debug mode is activated or not. If not, only some
+  basic information is written into auth.log.
+- config: specify the config file full path. If not, default is /etc/pam_devid.conf
+
+usage is then:
+----------8<----------
+optional pam_devid.so [debug] [config=<config_path>]
+---------->8----------
+
+MODULE CONFIGURATION
+
+As explained before, this module support a configuration file, using a syntax
+similar to usual ldap.conf files.
+A sample configuration file is described in this package. Report to this file
+in order to configure properly the module.
+
+AUTHOR
+
+Philippe Thierry (philippe.thierry@thalesgroup.com)
+Thales Communications & Security, OPS/SAT/NSS
+

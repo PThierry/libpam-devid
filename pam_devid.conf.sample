@@ -1,0 +1,146 @@
+#
+# Sample configuration for pam-devid module
+#
+
+# name: uri
+# description: specify the LDAP URI to connect to. Conform
+#   to standard URI declaration (see man ldap.conf(5)).
+# example: ldaps://my_ldap_server/
+# type: string
+uri ldap://my_ldap_server:389/
+
+# name: basedn
+# description: specify the base DN used for search request 
+# example: ou=People,dc=my,dc=domain,dc=com
+# type: string
+baseddn ou=People,dc=my,dc=domain,dc=com
+
+# name: binddn
+# description: specify the bind DNS for LDAP binding 
+# example: cn=user,dc=my,dc=domain,dc=com
+# type: string
+binddn cn=user,dc=my,dc=domain,dc=com
+
+# name: bindpw
+# description: specify the bind password associated to bind DN
+# example: foobar.42
+# type: string
+bindpw foobar.42
+
+# name: scope
+# description: Specify the search scope in the base DN.
+#   can be one of 'one', 'sub' or 'base'
+# example: scope sub
+# type: string
+scope sub
+
+# name: timelimit
+# description: Specify the timeout (in seconds) for LDAP requests.
+# example: timelimit 5
+# type: Integer
+timelimit 5
+
+# name: ldap_version
+# description: Specify the version of the LDAP protocol to use.
+#   should be one of '2' or '3'.
+# example: ldap_version 3 
+# type: Integer
+ldap_version 3
+
+# name: ssl
+# description: specify if the LDAP connection is SSL-based
+#   should be one of 'on', 'true', 'off', 'false'.
+# example: ssl on
+# type: string
+#
+# info: not yet supported.
+ssl off
+
+# name: start_tls 
+# description: specify if a TLS session should be use for LDAP requests
+#   should be one of 'on', 'true', 'off', 'false'.
+# example: start_tls on
+# type: string
+#
+# info: not yet supported.
+start_tls off
+
+# name: pam_min_uid
+# description: Specify the minimum UID for which the list of token should
+#   be loaded from LDAP server. If not set, no maximum threshold is used.
+# example: pam_min_uid 1000
+# type: integer 
+pam_min_uid 1000
+
+# name: pam_max_uid
+# description: Specify the maximum UID for which the list of token should
+#   be loaded from LDAP server. If not set, no minimum threshold is used.
+# example: pam_max_uid 44000
+# type: integer
+pam_max_uid 44000
+
+# name: tls_checkpeer
+# description: Specify if the LDAP server should be authentified
+#   should be one of 'yes', 'no'.
+# example: tls_checkeeper yes
+# type: string
+#
+# info: not yet supported.
+tls_checkpeer no
+
+# name: tls_cacertificate
+# description: Specify the path to the CA certificate to authenticate
+#   the LDAP server.
+# example: tls_cacertificate /etc/ssl/ca/cacert.pem
+# type: string
+#
+# info: not yet supported.
+tls_cacertificate /etc/ssl/ca/cacert.pem
+
+# name: tls_cacertdir 
+# description: set the CA cert directory.
+# example: tls_cacert_dir /etc/ssl/ca
+# type: string
+#
+# info: not yet supported.
+tls_cacertdir /etc/ssl/ca
+
+# name: tls_ciphers
+# description: Specify the list of ciphers algorithms allowed for the
+#   connection
+# example: tls_ciphers TLSv1
+# type: string
+#
+# info: not yet supported.
+tls_ciphers TLSv1
+
+# name: tls_cert
+# description: Specify the client certificate for LDAP connection.
+# example: tls_cert /etc/ssl/mycert.pem
+# type: string
+#
+# info: not yet supported.
+tls_cert /etc/ssl/mycert.pem
+
+# name: tls_key
+# description: Specify the TLS private key associated with the
+#  tls_cert certificate.
+# example: /etc/ssl/mykey.pem
+# type: string
+#
+# info: not yet supported.
+tls_key /etc/ssl/mykey.pem
+
+# name: pam_sasl_mech
+# description: Specify the SASL authentication mechanism for LDAP binding.
+#  only support 'simple' by now.
+# example: pam_sasl_mech simple
+# type: 
+pam_sasl_mech simple
+
+# name: debug 
+# description: specify if the debug mode is on or off. 
+#   should be one of 'on', 'true', 'off', 'false'.
+# example: debug on
+# type: 
+debug on
