@@ -1,0 +1,13 @@
+  ~~~~~~~~~~~~ PAM DEVID SUBMODULE TODO FILE ~~~~~~~~~~~~~
+
+IMPORTANT
+
+  Device ID values injection is not done ! PAM integration, LDAP requests
+  and configuration management is finished but serial ids are not supported
+  yet.
+
+  The number of consecutive session opening for the same user is not supported
+  yet. If a user is already logged, a new session of the same user should not
+  modify the ACL configuration. In the same maner, when a user close one
+  session when another session is still opened, the ACL should not be cleaned
+  also.
