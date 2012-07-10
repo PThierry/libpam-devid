@@ -229,7 +229,7 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 SUBDIRS = .
 EXTRA_DIST = Doxyfile
-CLEANFILES = *~ .*.swp .*.swo output* *.gcov *.gprof html latex
+CLEANFILES = *~ .*.swp .*.swo output* *.gcov *.gprof
 all: all-recursive
 
 .SUFFIXES:
