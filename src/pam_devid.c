@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <inttypes.h>
 /* for ldap */
 #include <ldap.h>
 
@@ -50,6 +51,7 @@ union u_foo {
   char **attr;
 };
 
+#define MODNAME "pam-devid"
 
 /* module configuration structure, loaded from file given in mod arg or in /etc/pam_devid.conf if not given */
 /*!
@@ -84,14 +86,25 @@ struct pam_devid_conf {
 
 typedef struct pam_devid_conf pam_devid_config_t;
 
-/* pam args structure for argument management */
-pam_devid_config_t pam_args;
-
 /*
-** By now the devid conf structure is a global variable, loaded at open_session() call.
-** The module as NO MEMORY from a call to another by now. Set to NULL when
-** loaded.
+** Context state for a given uid. Specify the session refcount (number of
+** opened session minus number of closed session) While refcount is positive,
+** the session is still logged on the system. Permits to manage multiple
+** simultaneous login/xdm connections.
 */
+struct context_state {
+  uint32_t	uid;
+  uint32_t	refcount;
+};
+
+/* context vector for all currently logged users */
+typedef struct context_state ctx_state_t;
+
+struct pam_module_ctx {
+  ctx_state_t *ctx_vector;
+  pam_devid_config_t config;
+};
+
 
 /*!
 ** @brief Buffer length for per-line configuration file parsing.
@@ -108,45 +121,73 @@ pam_devid_config_t pam_args;
  ** properly cleaned each time in order to avoid memory leak
  */
 static
-void clean_configuration(void)
+void clean_configuration(struct pam_module_ctx *ctx)
 {
-  if (pam_args.ldap_uri != NULL) {
-    free(pam_args.ldap_uri);
+  if (ctx == NULL) {
+    return;
   }
-  if (pam_args.ldap_bind_dn != NULL) {
-    free(pam_args.ldap_bind_dn);
+  /* cleaning config file */
+  if (ctx->config.ldap_uri != NULL) {
+    free(ctx->config.ldap_uri);
   }
-  if (pam_args.ldap_bind_pw != NULL) {
-    free(pam_args.ldap_bind_pw);
+  if (ctx->config.ldap_bind_dn != NULL) {
+    free(ctx->config.ldap_bind_dn);
   }
-  if (pam_args.ldap_base_dn != NULL) {
-    free(pam_args.ldap_base_dn);
+  if (ctx->config.ldap_bind_pw != NULL) {
+    free(ctx->config.ldap_bind_pw);
   }
-  if (pam_args.ldap_tls_cacertfile != NULL) {
-    free(pam_args.ldap_tls_cacertfile);
+  if (ctx->config.ldap_base_dn != NULL) {
+    free(ctx->config.ldap_base_dn);
   }
-  if (pam_args.ldap_tls_cacertdir != NULL) {
-    free(pam_args.ldap_tls_cacertdir);
+  if (ctx->config.ldap_tls_cacertfile != NULL) {
+    free(ctx->config.ldap_tls_cacertfile);
   }
-  if (pam_args.ldap_tls_ciphers != NULL) {
-    free(pam_args.ldap_tls_ciphers);
+  if (ctx->config.ldap_tls_cacertdir != NULL) {
+    free(ctx->config.ldap_tls_cacertdir);
   }
-  if (pam_args.ldap_tls_cert != NULL) {
-    free(pam_args.ldap_tls_cert);
+  if (ctx->config.ldap_tls_ciphers != NULL) {
+    free(ctx->config.ldap_tls_ciphers);
   }
-  if (pam_args.ldap_tls_key != NULL) {
-    free(pam_args.ldap_tls_key);
+  if (ctx->config.ldap_tls_cert != NULL) {
+    free(ctx->config.ldap_tls_cert);
   }
-  if (pam_args.ldap_sasl_mechanism != NULL) {
-    free(pam_args.ldap_sasl_mechanism);
+  if (ctx->config.ldap_tls_key != NULL) {
+    free(ctx->config.ldap_tls_key);
   }
-  if (pam_args.ldap_login_attr != NULL) {
-    free(pam_args.ldap_login_attr);
+  if (ctx->config.ldap_sasl_mechanism != NULL) {
+    free(ctx->config.ldap_sasl_mechanism);
   }
-  if (pam_args.pam_conf_file != NULL) {
-    free(pam_args.pam_conf_file);
+  if (ctx->config.ldap_login_attr != NULL) {
+    free(ctx->config.ldap_login_attr);
   }
+  if (ctx->config.pam_conf_file != NULL) {
+    free(ctx->config.pam_conf_file);
+  }
+  if (ctx->ctx_vector != NULL) {
+    free(ctx->ctx_vector);
+  }
+  free(ctx);
 }
+
+/*!
+ ** @brief cleanup_mod_ctx is the cleanup function for the module context
+ ** 
+ ** this function is called by the application(login, gdm...) when calling pam_end().
+ **
+ ** @param pamh the PAM context handler for this module
+ ** @param data the contextual data to clean
+ ** @param error_status the context of the cleanup execution
+ */
+static void cleanup_mod_ctx(pam_handle_t *pamh,
+                            void *data,
+                            int error_status)
+{
+  if (error_status == PAM_DATA_REPLACE) {
+    pam_syslog(pamh, LOG_INFO, "replacing contextual data. Cleaning old one.");
+  }
+  clean_configuration((struct pam_module_ctx*)data);
+}
+
 
 /*!
  ** @brief load_configuration load the module configuration from module's config file
@@ -176,7 +217,7 @@ static int load_configuration(pam_handle_t *pamh,
 
   if (fp == NULL)
   {
-    if (pam_args.pam_debug == true) {
+    if (config->pam_debug == true) {
       pam_syslog(pamh, LOG_INFO, "Opened config file %s", file);
     }
     /*
@@ -350,46 +391,49 @@ static int load_configuration(pam_handle_t *pamh,
 static int request_devid_from_ldap(pam_handle_t *pamh,
                                    char *name,
                                    int argc __attribute__((unused)),
-                                   const char **argv __attribute__((unused)))
+                                   const char **argv __attribute__((unused)),
+                                   const void *pam_ctx)
 {
   LDAP *ld;
+  const struct pam_module_ctx *ctx = (const struct pam_module_ctx*)pam_ctx;
   struct berval creds;
-  creds.bv_val = pam_args.ldap_bind_pw;
-  creds.bv_len = strlen(pam_args.ldap_bind_pw); /* Not NULL, checked during config load */
+  const pam_devid_config_t *pam_args = &(ctx->config);
+  creds.bv_val = pam_args->ldap_bind_pw;
+  creds.bv_len = strlen(pam_args->ldap_bind_pw); /* Not NULL, checked during config load */
   LDAPMessage *msg = NULL;
   union u_foo foo;
   char *ldap_filter = NULL;
   int  res;
 
   ldap_filter = malloc(128);
-  snprintf(ldap_filter, 127, "(%s=%s)", pam_args.ldap_login_attr, name);
+  snprintf(ldap_filter, 127, "(%s=%s)", pam_args->ldap_login_attr, name);
   /* FIXME: to be replaced by a proper conf */
   foo.const_attr = ldap_attributes;
 
   /* initialize the ldap library */
-  if ((res = ldap_initialize(&ld, pam_args.ldap_uri)) != 0) {
-    if (pam_args.pam_debug == true) {
+  if ((res = ldap_initialize(&ld, pam_args->ldap_uri)) != 0) {
+    if (pam_args->pam_debug == true) {
       pam_syslog(pamh, LOG_ERR, "ldap_init failed");
     }
     free(ldap_filter);
     return 1;
   }
   /* set ldap option (protocol version) */
-  if (ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &(pam_args.ldap_version)) != LDAP_OPT_SUCCESS)
+  if (ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &(pam_args->ldap_version)) != LDAP_OPT_SUCCESS)
   {
-    if (pam_args.pam_debug) {
+    if (pam_args->pam_debug) {
       pam_syslog(pamh, LOG_ERR, "ldap_set_option failed!");
     }
     free(ldap_filter);
     return 1;
   }
   /* binding to LDAP server */
-  if (ldap_sasl_bind_s(ld, pam_args.ldap_bind_dn,
+  if (ldap_sasl_bind_s(ld, pam_args->ldap_bind_dn,
                        NULL, /* SIMPLE authentication (no SASL) */
                        &creds,
                        NULL, NULL, NULL) /* No SSL */
                        != LDAP_SUCCESS ) {
-    if (pam_args.pam_debug) {
+    if (pam_args->pam_debug) {
       pam_syslog(pamh, LOG_ERR, "ldap_bind failed!");
     }
     free(ldap_filter);
@@ -397,7 +441,7 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
   }
   /* Let's search for user, and get uid and devid */
   res = ldap_search_ext_s(ld,
-                          pam_args.ldap_base_dn,
+                          pam_args->ldap_base_dn,
                           LDAP_SCOPE_SUB,
                           ldap_filter, /* filter: const char* */
                           foo.attr,
@@ -418,9 +462,9 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
       entryval = ldap_get_values_len(ld, entry, "uidNumber");
       if (entryval) {
         pam_syslog(pamh, LOG_INFO, "uid found for user %s: %s", name, entryval[0]->bv_val);
-        if (strtol(entryval[0]->bv_val, NULL, 10) < pam_args.pam_min_uid) {
-          if (pam_args.pam_debug == true) {
-            pam_syslog(pamh, LOG_INFO, "uid (%s) smaller than minimum requested (%d)", entryval[0]->bv_val, pam_args.pam_min_uid);
+        if (strtol(entryval[0]->bv_val, NULL, 10) < pam_args->pam_min_uid) {
+          if (pam_args->pam_debug == true) {
+            pam_syslog(pamh, LOG_INFO, "uid (%s) smaller than minimum requested (%d)", entryval[0]->bv_val, pam_args->pam_min_uid);
           }
           free(ldap_filter);
           return 0;
@@ -445,22 +489,18 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
 
 
 /*!
- ** @brief parse_pam_args parse the pam module arguments
- **
- ** List of arguments:
- ** - enable_pam_user: future use
- ** - debug: enable full debug. If not present, no debug printed in auth.log
- ** - config: set the config file (config=/path/to/config). If not set, config file /etc/pam_devid.conf is used)
- ** - min_uid: set the minimum uid for each we have to get back the list of devid (mmin_uid=NUM). Default: 999. 
+ ** @brief load_all_options parse the pam module arguments & config file
  **
  ** @param pamh the PAM module handler, for pam_syslog
  ** @param argc the module argc
  ** @param argv the module argv
+ ** @param pam_args the pam arguments & configuration structure
  **
  ** @return PAM_SUCCESS if correctly done, of PAM_FAILED if not properly treated
  */
 static
-int load_all_options(pam_handle_t *pamh, int argc, const char **argv)
+int load_all_options(pam_handle_t *pamh, int argc, const char **argv,
+                     pam_devid_config_t *pam_args)
 {
   int i;
   int ret = PAM_SERVICE_ERR;
@@ -470,23 +510,23 @@ int load_all_options(pam_handle_t *pamh, int argc, const char **argv)
     assert(argv[i] != NULL);
 
   /* first, set default values */
-  pam_args.pam_debug           = false;
-  pam_args.ldap_version        = 3;
-  pam_args.pam_conf_loaded     = false;
+  pam_args->pam_debug           = false;
+  pam_args->ldap_version        = 3;
+  pam_args->pam_conf_loaded     = false;
 
   for (i = 0; i < argc; ++i) {
     if (strcasecmp("debug", argv[i]) == 0) {
-      pam_args.pam_debug = true;
+      pam_args->pam_debug = true;
     }
     else if (strncmp("config=", argv[i], 7) == 0 && strlen(argv[i]) > 7) {
       /* get conf file ... */
-      ret = load_configuration(pamh, &(argv[i][7]), &pam_args); /* ... and load */
+      ret = load_configuration(pamh, &(argv[i][7]), pam_args); /* ... and load */
     } else {
       pam_syslog(pamh, LOG_ERR, "unknown pam_devid option \"%s\"\n", argv[i]);
     }
   }
-  if (pam_args.pam_conf_loaded == false) {
-    ret = load_configuration(pamh, "/etc/pam_devid.conf", &pam_args); /* ... and load from std file if no file given in arg */
+  if (pam_args->pam_conf_loaded == false) {
+    ret = load_configuration(pamh, "/etc/pam_devid.conf", pam_args); /* ... and load from std file if no file given in arg */
   }
   return ret;
 }
@@ -508,21 +548,38 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
 {
   char *name;
   int devid_res = PAM_SERVICE_ERR;
+  int ctx_res;
+  const void *data;
+  struct pam_module_ctx *module_ctx = NULL;
 
-  devid_res = load_all_options(pamh, argc, argv);
-  if (devid_res == PAM_SUCCESS) {
-    devid_res = pam_get_item(pamh, PAM_USER,  (const void **)&name);
-    if (devid_res != PAM_SUCCESS) {
-      pam_syslog(pamh, LOG_ERR, "error when getting PAM_USER item !");
+  /* first load module data. If unexistant, fullfill and load it */
+  ctx_res = pam_get_data(pamh, MODNAME, &data);
+  if (ctx_res == PAM_NO_MODULE_DATA) { // no data for now, create new context
+    module_ctx = malloc(sizeof(struct pam_module_ctx));
+    if (NULL == module_ctx) {
+      pam_syslog(pamh, LOG_ERR, "error during the allocation of module context");
+      goto end;
     }
-    if (name && pam_args.pam_debug) {
-      pam_syslog(pamh, LOG_INFO, "user %s session opened", name);
+    /* load all options (arguments & config file) */
+    devid_res = load_all_options(pamh, argc, argv, &(module_ctx->config));
+    if (devid_res == PAM_SUCCESS) {
+      devid_res = pam_get_item(pamh, PAM_USER, (const void **)&name);
+      if (devid_res != PAM_SUCCESS) {
+        pam_syslog(pamh, LOG_ERR, "error when getting PAM_USER item !");
+      }
+      if (name && module_ctx->config.pam_debug) {
+        pam_syslog(pamh, LOG_INFO, "user %s session opened", name);
+      }
+    } else {
+      pam_syslog(pamh, LOG_ERR, "error during configuration, leaving.");
+      goto end;
     }
-    request_devid_from_ldap(pamh, name, argc, argv);
-  } else {
-    pam_syslog(pamh, LOG_ERR, "error during configuration, leaving.");
+    /* ok context created. Now push it to pam context manager */
+    pam_set_data(pamh, MODNAME, (void**)&module_ctx, cleanup_mod_ctx);
+    data = &module_ctx;
   }
-  clean_configuration();
+  request_devid_from_ldap(pamh, name, argc, argv, data);
+end:
   return devid_res;
 }
 
@@ -544,9 +601,16 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
   char *name;
   int ret __attribute__((unused));
   int devid_res = PAM_SERVICE_ERR;
+  int ctx_res;
+  const void *data;
 
+  ctx_res = pam_get_data(pamh, MODNAME, &data);
+  if (ctx_res == PAM_NO_MODULE_DATA) { // no data found ?!?
+    pam_syslog(pamh, LOG_INFO, "No module data found!");
+    goto end;
+  }
   pam_get_item(pamh, PAM_USER,  (const void **)&name);
-  if (name && pam_args.pam_debug) {
+  if (name && ((const struct pam_module_ctx*)data)->config.pam_debug) {
     pam_syslog(pamh, LOG_INFO, "user %s session closed", name);
   }
   /*
@@ -557,6 +621,7 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
   ** in order to know if wee have to load a new keylist or not.
   */
   devid_res = PAM_SUCCESS;
+end:
   return devid_res;
 }
 
