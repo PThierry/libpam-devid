@@ -571,7 +571,7 @@ static int is_already_logged(const char *name, pam_handle_t *pamh)
             strcmp(utmp.ut_host, ":0") == 0) // used by terms
         {
           pam_syslog(pamh, LOG_INFO, "user %s is already logged in, on tty %s from host %s", utmp.ut_name, utmp.ut_line, utmp.ut_host);
-          val = 1;
+          val++;
         }
       }
     }
@@ -647,27 +647,34 @@ end:
  ** @param argc the module's arguments list counter 
  ** @param argv the module's arguments list
  ** 
- ** @return always 0 for the moment
+ ** @return one of pam return codes depending on the treatments results
  */
 PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
                                     int          flags __attribute__((unused)),
                                     int          argc __attribute__((unused)),
                                     const char** argv __attribute__((unused)))
 {
-  char *name;
-  int ret __attribute__((unused));
+  const char *name;
+  int ret;
   int devid_res = PAM_SERVICE_ERR;
   int ctx_res;
   const void *data;
+  int sesscount;
 
   ctx_res = pam_get_data(pamh, MODNAME, &data);
   if (ctx_res == PAM_NO_MODULE_DATA) { // no data found ?!?
     pam_syslog(pamh, LOG_INFO, "No module data found!");
     goto end;
   }
-  pam_get_item(pamh, PAM_USER,  (const void **)&name);
-  if (name && ((const struct pam_module_ctx*)data)->config.pam_debug) {
-    pam_syslog(pamh, LOG_INFO, "user %s session closed", name);
+  ret = pam_get_user(pamh, &name, NULL);
+  if (ret != PAM_SUCCESS || name == NULL) {
+    pam_syslog(pamh, LOG_ERR, "unable to get back user name");
+    return ret;
+  }
+  pam_syslog(pamh, LOG_INFO, "user %s session closed", name);
+  /* if there is more than one currently opened local sessions, then ACL are maintained */
+  if ((sesscount = is_already_logged(name, pamh)) > 1) {
+    pam_syslog(pamh, LOG_INFO, "there is %d other opened sessions for user %s. ACL not cleaned.", sesscount, name);
   }
   /*
   ** Okay nothing is done here. We need to manage session counter in order to
