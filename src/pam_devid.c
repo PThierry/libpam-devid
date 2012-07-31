@@ -85,6 +85,7 @@ struct pam_devid_conf {
   bool pam_conf_loaded; /**< set to true when this structure is completely loaded */
   uid_t pam_min_uid; /**< minimum uid for requesting devid in LDAP */
   uid_t pam_max_uid; /**< maximum uid for requesting devid in LDAP */
+  bool pam_one_user; /**< set to True if local user concurrency is disabled */
 };
 
 typedef struct pam_devid_conf pam_devid_config_t;
@@ -347,6 +348,11 @@ static int load_configuration(pam_handle_t *pamh,
         config->pam_debug = true;
       else
         config->pam_debug = false;
+    } else if (!strcasecmp(k, "pam_one_local_user")) {
+      if (!strcasecmp (v, "on") || !strcasecmp (v, "yes") || !strcasecmp (v, "true"))
+        config->pam_one_user = true;
+      else
+        config->pam_one_user = false;
     }
   } /* end of while() */
   /* okay no check that all necessary configuration data is set */
@@ -582,6 +588,47 @@ end:
 }
 
 /*!
+ ** @brief other_local_user_logged check if there is other local user(s) already logged in locally
+ ** 
+ ** @param name the user name, given by PAM
+ ** @param pamh the pam handler for this module
+ ** 
+ ** @return 1 if there is one or more other local users, or 0
+ */
+static int other_local_user_logged(const char *name, pam_handle_t *pamh)
+{
+  int val = 0;
+  int fd;
+  struct utmp utmp;
+
+  fd = open("/var/run/utmp", O_RDONLY, 0);
+  if (fd == -1) {
+    pam_syslog(pamh, LOG_ERR, "Unable to open utmp file to check for user presence");
+    goto end;
+  }
+  /* check if the user is already logged in using utmp. If logged in, then just leave */
+  while (read(fd, (char*)&utmp, sizeof(struct utmp)) == sizeof(struct utmp)) {
+    if (utmp.ut_type == USER_PROCESS) {
+      if (strcmp(utmp.ut_name, name) != 0) {
+        if (strcmp(utmp.ut_line, ":0") == 0 || // used by kdm, to be checked for gdm/xdm
+            strcmp(utmp.ut_host, ":0") == 0) // used by terms
+        {
+          pam_syslog(pamh, LOG_INFO, "user %s is already logged in, on tty %s from host %s", utmp.ut_name, utmp.ut_line, utmp.ut_host);
+          val++;
+        } else if (strncmp(utmp.ut_line, "tty", 3) == 0) { // logged on local text terminal
+          pam_syslog(pamh, LOG_INFO, "user %s is already logged in, on text tty %s", utmp.ut_name, utmp.ut_line);
+          val++;
+        }
+      }
+    }
+  }
+  // FIXME: if root or any LOCAL user (not LDAP) is logged, this function also return TRUE.
+  close(fd);
+end:
+  return val;
+}
+
+/*!
  ** @brief pam_sm_open_session is called when a user session is opened
  ** 
  ** @param pamh the current pam module handler, given by PAM 
@@ -620,23 +667,30 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
       }
       /* load all options (arguments & config file) */
       devid_res = load_all_options(pamh, argc, argv, &(module_ctx->config));
-      if (devid_res == PAM_SUCCESS) {
-        pam_syslog(pamh, LOG_ERR, "error when getting PAM_USER item !");
-        if (name && module_ctx->config.pam_debug) {
-          pam_syslog(pamh, LOG_INFO, "user %s session opened", name);
-        }
-      } else {
+      if (devid_res != PAM_SUCCESS) {
         pam_syslog(pamh, LOG_ERR, "error during configuration, leaving.");
-        goto end;
+        goto error_load;
+      }
+      if (module_ctx->config.pam_debug) {
+        pam_syslog(pamh, LOG_INFO, "user %s session opened", name);
       }
       /* ok context created. Now push it to pam context manager */
       pam_set_data(pamh, MODNAME, (void**)&module_ctx, cleanup_mod_ctx);
       data = &module_ctx;
     }
-    request_devid_from_ldap(pamh, name, argc, argv, data);
+    if (module_ctx->config.pam_one_user && other_local_user_logged(name, pamh)) {
+      /* if another local user exists, ignore the current one */
+      ;
+    } else {
+      /* otherwise, push current user's ACL */
+      request_devid_from_ldap(pamh, name, argc, argv, data);
+    }
   }
 end:
   return devid_res;
+error_load:
+  free(module_ctx);
+  return PAM_SERVICE_ERR;
 }
 
 /*!
@@ -675,6 +729,9 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
   /* if there is more than one currently opened local sessions, then ACL are maintained */
   if ((sesscount = is_already_logged(name, pamh)) > 1) {
     pam_syslog(pamh, LOG_INFO, "there is %d other opened sessions for user %s. ACL not cleaned.", sesscount, name);
+  } else {
+    // clean ACL for current user (FIXME: not yet supporting multiple local users management - see pam_one_local_user option)
+    ;
   }
   /*
   ** Okay nothing is done here. We need to manage session counter in order to

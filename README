@@ -55,6 +55,16 @@ XDM (or GDM/KDM) must use this file to reccord a graphical session. Otherwise,
 the module will not detect a previous authentication when opening the first
 tty console, and will update the allowed devid a second time.
 
+It seems that in wheezy, su and sudo commands don't generate new utmp lines, avoiding
+confusion on user sessions when executing sudo commands or su commands.
+As a consequence, it is not needed to check such sessions when managing utmp
+based users sessions.
+Only (x|k|g)dm, terminals and login-based session are checked.
+
+Nevertheless, be sure to set the pam_devid.so modules only in specific session
+config files (i.e. /etc/pam.d/gdm3, /etc/pam.d/login, etc) so that this module
+will NOT be called for session management of su, sudo, ssh, etc.
+
 AUTHOR
 
 Philippe Thierry (philippe.thierry@thalesgroup.com)
