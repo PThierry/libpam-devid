@@ -22,8 +22,11 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <inttypes.h>
+#include <unistd.h>
 /* for ldap */
 #include <ldap.h>
+/* for utmp */
+#include <utmp.h>
 
 PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
                                    int          flags,
@@ -389,7 +392,7 @@ static int load_configuration(pam_handle_t *pamh,
  ** @return  always 0 by now
  */
 static int request_devid_from_ldap(pam_handle_t *pamh,
-                                   char *name,
+                                   const char *name,
                                    int argc __attribute__((unused)),
                                    const char **argv __attribute__((unused)),
                                    const void *pam_ctx)
@@ -404,6 +407,8 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
   union u_foo foo;
   char *ldap_filter = NULL;
   int  res;
+  LDAPMessage *entry = NULL;
+  struct berval **entryval;
 
   ldap_filter = malloc(128);
   snprintf(ldap_filter, 127, "(%s=%s)", pam_args->ldap_login_attr, name);
@@ -415,8 +420,7 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
     if (pam_args->pam_debug == true) {
       pam_syslog(pamh, LOG_ERR, "ldap_init failed");
     }
-    free(ldap_filter);
-    return 1;
+    goto error_init;
   }
   /* set ldap option (protocol version) */
   if (ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &(pam_args->ldap_version)) != LDAP_OPT_SUCCESS)
@@ -424,8 +428,7 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
     if (pam_args->pam_debug) {
       pam_syslog(pamh, LOG_ERR, "ldap_set_option failed!");
     }
-    free(ldap_filter);
-    return 1;
+    goto error_init;
   }
   /* binding to LDAP server */
   if (ldap_sasl_bind_s(ld, pam_args->ldap_bind_dn,
@@ -436,8 +439,7 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
     if (pam_args->pam_debug) {
       pam_syslog(pamh, LOG_ERR, "ldap_bind failed!");
     }
-    free(ldap_filter);
-    return 1;
+    goto error_init;
   }
   /* Let's search for user, and get uid and devid */
   res = ldap_search_ext_s(ld,
@@ -450,28 +452,30 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
                           NULL, NULL, /* no SSL */
                           12 /* max entries*/,
                           &msg);
+  if (res != LDAP_SUCCESS) {
+    goto error_bind;
+  }
   /* count the number of returned entry (should be one - the user data)*/
   if (ldap_count_entries(ld, msg) == 0) {
     pam_syslog(pamh, LOG_ERR, "no entry found!");
-  } else {
-    LDAPMessage *entry = NULL;
-    entry = ldap_first_entry(ld, msg);
-    /* get the entry content */
-    if (entry) {
-      struct berval **entryval;
-      entryval = ldap_get_values_len(ld, entry, "uidNumber");
-      if (entryval) {
-        pam_syslog(pamh, LOG_INFO, "uid found for user %s: %s", name, entryval[0]->bv_val);
-        if (strtol(entryval[0]->bv_val, NULL, 10) < pam_args->pam_min_uid) {
-          if (pam_args->pam_debug == true) {
-            pam_syslog(pamh, LOG_INFO, "uid (%s) smaller than minimum requested (%d)", entryval[0]->bv_val, pam_args->pam_min_uid);
-          }
-          free(ldap_filter);
-          return 0;
-        }
-      }
-    } else {
-      pam_syslog(pamh, LOG_ERR, "entry is NULL!");
+    goto error_request;
+  }
+  /* get the first user entry content */
+  entry = ldap_first_entry(ld, msg);
+  if (entry == NULL) {
+    pam_syslog(pamh, LOG_ERR, "entry is NULL!");
+    goto error_request;
+  }
+  /*** From here, the code is not ineresting. The uid number is got, not a list of devices id */
+  entryval = ldap_get_values_len(ld, entry, "uidNumber");
+  if (!entryval) {
+    pam_syslog(pamh, LOG_ERR, "entry uidNumber not found in LDAP");
+  }
+  pam_syslog(pamh, LOG_INFO, "uid found for user %s: %s", name, entryval[0]->bv_val);
+  if (strtol(entryval[0]->bv_val, NULL, 10) < pam_args->pam_min_uid) {
+    if (pam_args->pam_debug == true) {
+      pam_syslog(pamh, LOG_INFO, "uid (%s) smaller than minimum requested (%d)", entryval[0]->bv_val, pam_args->pam_min_uid);
+      goto nodata;
     }
   }
   ldap_msgfree(msg);
@@ -479,12 +483,21 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
   res = ldap_unbind_ext(ld, NULL, NULL);
   if (res != 0) {
     pam_syslog(pamh, LOG_ERR, "ldap_unbind_s: %s", ldap_err2string(res));
-    free(ldap_filter);
-    return 1;
+    goto error_init;
   }
-  pam_syslog(pamh, LOG_ERR, "request from LDAP done");
+  pam_syslog(pamh, LOG_INFO, "request from LDAP done");
   free(ldap_filter);
   return 0;
+
+  /* error management */
+nodata:
+error_request:
+  ldap_msgfree(msg);
+error_bind:
+  ldap_unbind_ext(ld, NULL, NULL);
+error_init:
+  free(ldap_filter);
+return 1;
 }
 
 
@@ -532,6 +545,43 @@ int load_all_options(pam_handle_t *pamh, int argc, const char **argv,
 }
 
 /*!
+ ** @brief is_already_logged check if the user is already logged in locally
+ ** 
+ ** @param name the user name, given by PAM
+ ** @param pamh the pam handler for this module
+ ** 
+ ** @return 1 if the user is already logged in, or 0
+ */
+static int is_already_logged(const char *name, pam_handle_t *pamh)
+{
+  int val = 0;
+  int fd;
+  struct utmp utmp;
+
+  fd = open("/var/run/utmp", O_RDONLY, 0);
+  if (fd == -1) {
+    pam_syslog(pamh, LOG_ERR, "Unable to open utmp file to check for user presence");
+    goto end;
+  }
+  /* check if the user is already logged in using utmp. If logged in, then just leave */
+  while (read(fd, (char*)&utmp, sizeof(struct utmp)) == sizeof(struct utmp)) {
+    if (utmp.ut_type == USER_PROCESS) {
+      if (strcmp(utmp.ut_name, name) == 0) {
+        if (strcmp(utmp.ut_line, ":0") == 0 || // used by kdm, to be checked for gdm/xdm
+            strcmp(utmp.ut_host, ":0") == 0) // used by terms
+        {
+          pam_syslog(pamh, LOG_INFO, "user %s is already logged in, on tty %s from host %s", utmp.ut_name, utmp.ut_line, utmp.ut_host);
+          val = 1;
+        }
+      }
+    }
+  }
+  close(fd);
+end:
+  return val;
+}
+
+/*!
  ** @brief pam_sm_open_session is called when a user session is opened
  ** 
  ** @param pamh the current pam module handler, given by PAM 
@@ -546,39 +596,45 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
                                    int          argc,
                                    const char** argv)
 {
-  char *name;
+  const char *name = NULL;
   int devid_res = PAM_SERVICE_ERR;
   int ctx_res;
   const void *data;
   struct pam_module_ctx *module_ctx = NULL;
 
-  /* first load module data. If unexistant, fullfill and load it */
-  ctx_res = pam_get_data(pamh, MODNAME, &data);
-  if (ctx_res == PAM_NO_MODULE_DATA) { // no data for now, create new context
-    module_ctx = malloc(sizeof(struct pam_module_ctx));
-    if (NULL == module_ctx) {
-      pam_syslog(pamh, LOG_ERR, "error during the allocation of module context");
-      goto end;
-    }
-    /* load all options (arguments & config file) */
-    devid_res = load_all_options(pamh, argc, argv, &(module_ctx->config));
-    if (devid_res == PAM_SUCCESS) {
-      devid_res = pam_get_item(pamh, PAM_USER, (const void **)&name);
-      if (devid_res != PAM_SUCCESS) {
-        pam_syslog(pamh, LOG_ERR, "error when getting PAM_USER item !");
-      }
-      if (name && module_ctx->config.pam_debug) {
-        pam_syslog(pamh, LOG_INFO, "user %s session opened", name);
-      }
-    } else {
-      pam_syslog(pamh, LOG_ERR, "error during configuration, leaving.");
-      goto end;
-    }
-    /* ok context created. Now push it to pam context manager */
-    pam_set_data(pamh, MODNAME, (void**)&module_ctx, cleanup_mod_ctx);
-    data = &module_ctx;
+  /* get the user name... */
+  devid_res = pam_get_user(pamh, &name, NULL);
+  if (devid_res != PAM_SUCCESS || name == NULL) {
+    pam_syslog(pamh, LOG_ERR, "unable to get back user name");
+    return devid_res;
   }
-  request_devid_from_ldap(pamh, name, argc, argv, data);
+  /* load LDAP infos only if user is not yet logged locally on the host */
+  if (!is_already_logged(name, pamh)) {
+    /* first load module data. If inexistent, fulfill and load it */
+    ctx_res = pam_get_data(pamh, MODNAME, &data);
+    if (ctx_res == PAM_NO_MODULE_DATA) { // no data for now, create new context
+      module_ctx = malloc(sizeof(struct pam_module_ctx));
+      if (NULL == module_ctx) {
+        pam_syslog(pamh, LOG_ERR, "error during the allocation of module context");
+        goto end;
+      }
+      /* load all options (arguments & config file) */
+      devid_res = load_all_options(pamh, argc, argv, &(module_ctx->config));
+      if (devid_res == PAM_SUCCESS) {
+        pam_syslog(pamh, LOG_ERR, "error when getting PAM_USER item !");
+        if (name && module_ctx->config.pam_debug) {
+          pam_syslog(pamh, LOG_INFO, "user %s session opened", name);
+        }
+      } else {
+        pam_syslog(pamh, LOG_ERR, "error during configuration, leaving.");
+        goto end;
+      }
+      /* ok context created. Now push it to pam context manager */
+      pam_set_data(pamh, MODNAME, (void**)&module_ctx, cleanup_mod_ctx);
+      data = &module_ctx;
+    }
+    request_devid_from_ldap(pamh, name, argc, argv, data);
+  }
 end:
   return devid_res;
 }

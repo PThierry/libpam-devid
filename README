@@ -47,6 +47,14 @@ similar to usual ldap.conf files.
 A sample configuration file is described in this package. Report to this file
 in order to configure properly the module.
 
+REQUIREMENTS
+
+The detection of previous loggings in order to avoid LDAP requests when opening
+a new term (for example) is based on the /var/run/utmp file. This means that
+XDM (or GDM/KDM) must use this file to reccord a graphical session. Otherwise,
+the module will not detect a previous authentication when opening the first
+tty console, and will update the allowed devid a second time.
+
 AUTHOR
 
 Philippe Thierry (philippe.thierry@thalesgroup.com)
