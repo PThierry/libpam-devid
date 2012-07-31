@@ -21,28 +21,14 @@
 #include <sys/types.h>
 #include <inttypes.h>
 #include <utmp.h>
+#include <unistd.h>
 
 
-int getutmp(int *fd, struct utmp *utmp)
+int main(int argc __attribute__((unused)),
+         char** argv __attribute__((unused)))
 {
-	if (*fd < 0)
-		*fd = open(_PATH_UTMP, O_RDONLY);
-	if (read(*fd, utmp, sizeof(*utmp)) == sizeof(*utmp))
-		return 1;
-	close(*fd);
-	return 0;
-}
-
-
-int main(int argc, char** argv)
-{
-  char *name = NULL;
-  int ctx_res;
-  const void *data;
-  struct pam_module_ctx *module_ctx = NULL;
-  struct utmp utmp;
-  struct password *pw = NULL;
   int fd = -1;
+  struct utmp utmp;
 
   fd = open("/var/run/utmp", O_RDONLY, 0);
   /* check if the user is already logged in using utmp. If logged in, then just leave */

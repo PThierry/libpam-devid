@@ -8,7 +8,7 @@
 ## Last update mer. 20 juin 2012 15:30:10 CEST Philippe THIERRY
 ##
 
-SUBDIRS = src doc .
+SUBDIRS = src test doc .
 
 doc:
 	$(MAKE) -C doc doc

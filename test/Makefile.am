@@ -12,6 +12,8 @@ SUBDIRS = .
 
 check_PROGRAMS = test_pam_utmp
 
+TESTS = test_pam_utmp
+
 test_pam_utmp_SOURCES = pam_utmp.c
 
 EXTRA_DIST = 
