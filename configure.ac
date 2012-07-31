@@ -13,7 +13,7 @@
 #############################################################################
 ## Preambule
 #############################################################################
-AC_INIT([pam-devid], [0.2], [philippe.thierry@thalesgroup.com], [Philippe THIERRY])
+AC_INIT([pam-devid], [0.3], [philippe.thierry@thalesgroup.com], [Philippe THIERRY])
 AM_INIT_AUTOMAKE([1.9.5 foreign dist-bzip2 no-dist-gzip foreign])
 AC_CONFIG_SRCDIR([src/pam_devid.c])
 AM_CONFIG_HEADER(src/config.h)
@@ -44,7 +44,8 @@ AC_PROG_RANLIB
 #############################################################################
 ## Headers check
 #############################################################################
-AC_CHECK_HEADER([security/pam_modules.h],,AC_MSG_ERROR([Cannot find security/pam_modulesh ! Check your installation !]))
+AC_CHECK_LIB(pam, pam_get_item, [], AC_MSG_ERROR([Cannot find libpam library ! Check your installation !]), [])
+AC_CHECK_HEADER([security/pam_modules.h],,AC_MSG_ERROR([Cannot find security/pam_modules.h ! Check your installation !]))
 
 #############################################################################
 ## Libraries check
