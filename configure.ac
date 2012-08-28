@@ -15,8 +15,8 @@
 #############################################################################
 AC_INIT([pam-devid], [0.3], [philippe.thierry@thalesgroup.com], [Philippe THIERRY])
 AM_INIT_AUTOMAKE([1.9.5 foreign dist-bzip2 no-dist-gzip foreign])
-AC_CONFIG_SRCDIR([src/pam_devid.c])
-AM_CONFIG_HEADER(src/config.h)
+AC_CONFIG_SRCDIR([pam/pam_devid.c])
+AM_CONFIG_HEADER(pam/config.h)
 AM_MAINTAINER_MODE
 
 #############################################################################
@@ -173,7 +173,8 @@ AC_SUBST([PAM_MODDIR])
 AC_CONFIG_FILES([
 Makefile
 doc/Makefile
-src/Makefile
+pam/Makefile
+devidd/Makefile
 test/Makefile
 ])
 
