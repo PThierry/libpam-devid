@@ -15,6 +15,8 @@ doc:
 
 .PHONY: doc
 
+ACLOCAL_AMFLAGS = -I m4
+
 EXTRA_DIST = 
 
 CLEANFILES = *~ .*.swp .*.swo output* *.gcov *.gprof

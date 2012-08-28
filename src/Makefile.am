@@ -13,19 +13,22 @@ SUBDIRS = .
 varrundir = ${localstatedir}/run
 
 moduledir = @PAM_MODDIR@
+#noinst_HEADERS = pam_mod_api.h
+
 module_LTLIBRARIES = pam_devid.la
 
 pam_devid_la_SOURCES = pam_devid.c
+EXTRA_pam_devid_la_SOURCES = mod_udev.c
 pam_devid_la_CFLAGS = ${AM_CFLAGS}
 pam_devid_la_LDFLAGS = -module -avoid-version
-pam_devid_la_LIBADD =  -lldap
+pam_devid_la_DEPENDENCIES = $(PAM_DEVID_MOD)
+pam_devid_la_LIBADD = $(PAM_DEVID_MOD) -lldap
 
 # options part
 if EFENCE
 pam_devid_la_LIBADD += $(EFENCEFLAGS)
 endif
 #
-
 EXTRA_DIST = 
 
 CLEANFILES = *~ .*.swp .*.swo output* *.gcov *.gprof

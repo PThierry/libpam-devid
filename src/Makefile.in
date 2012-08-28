@@ -58,7 +58,10 @@ subdir = src
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in \
 	$(srcdir)/config.h.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
-am__aclocal_m4_deps = $(top_srcdir)/configure.ac
+am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
+	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
+	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
+	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
@@ -95,7 +98,6 @@ am__uninstall_files_from_dir = { \
 am__installdirs = "$(DESTDIR)$(moduledir)"
 LTLIBRARIES = $(module_LTLIBRARIES)
 am__DEPENDENCIES_1 =
-pam_devid_la_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am_pam_devid_la_OBJECTS = pam_devid_la-pam_devid.lo
 pam_devid_la_OBJECTS = $(am_pam_devid_la_OBJECTS)
 pam_devid_la_LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) \
@@ -114,8 +116,8 @@ CCLD = $(CC)
 LINK = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
 	$(LDFLAGS) -o $@
-SOURCES = $(pam_devid_la_SOURCES)
-DIST_SOURCES = $(pam_devid_la_SOURCES)
+SOURCES = $(pam_devid_la_SOURCES) $(EXTRA_pam_devid_la_SOURCES)
+DIST_SOURCES = $(pam_devid_la_SOURCES) $(EXTRA_pam_devid_la_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive dvi-recursive \
 	html-recursive info-recursive install-data-recursive \
 	install-dvi-recursive install-exec-recursive \
@@ -220,6 +222,7 @@ PACKAGE_STRING = @PACKAGE_STRING@
 PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
+PAM_DEVID_MOD = @PAM_DEVID_MOD@
 PAM_MODDIR = @PAM_MODDIR@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 RANLIB = @RANLIB@
@@ -284,11 +287,14 @@ top_srcdir = @top_srcdir@
 SUBDIRS = .
 varrundir = ${localstatedir}/run
 moduledir = @PAM_MODDIR@
+#noinst_HEADERS = pam_mod_api.h
 module_LTLIBRARIES = pam_devid.la
 pam_devid_la_SOURCES = pam_devid.c
+EXTRA_pam_devid_la_SOURCES = mod_udev.c
 pam_devid_la_CFLAGS = ${AM_CFLAGS}
 pam_devid_la_LDFLAGS = -module -avoid-version
-pam_devid_la_LIBADD = -lldap $(am__append_1)
+pam_devid_la_DEPENDENCIES = $(PAM_DEVID_MOD)
+pam_devid_la_LIBADD = $(PAM_DEVID_MOD) -lldap $(am__append_1)
 #
 EXTRA_DIST = 
 CLEANFILES = *~ .*.swp .*.swo output* *.gcov *.gprof
@@ -383,6 +389,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pam_devid_la-mod_udev.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pam_devid_la-pam_devid.Plo@am__quote@
 
 .c.o:
@@ -412,6 +419,13 @@ pam_devid_la-pam_devid.lo: pam_devid.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='pam_devid.c' object='pam_devid_la-pam_devid.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pam_devid_la_CFLAGS) $(CFLAGS) -c -o pam_devid_la-pam_devid.lo `test -f 'pam_devid.c' || echo '$(srcdir)/'`pam_devid.c
+
+pam_devid_la-mod_udev.lo: mod_udev.c
+@am__fastdepCC_TRUE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pam_devid_la_CFLAGS) $(CFLAGS) -MT pam_devid_la-mod_udev.lo -MD -MP -MF $(DEPDIR)/pam_devid_la-mod_udev.Tpo -c -o pam_devid_la-mod_udev.lo `test -f 'mod_udev.c' || echo '$(srcdir)/'`mod_udev.c
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/pam_devid_la-mod_udev.Tpo $(DEPDIR)/pam_devid_la-mod_udev.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='mod_udev.c' object='pam_devid_la-mod_udev.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pam_devid_la_CFLAGS) $(CFLAGS) -c -o pam_devid_la-mod_udev.lo `test -f 'mod_udev.c' || echo '$(srcdir)/'`mod_udev.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

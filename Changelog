@@ -1,3 +1,21 @@
+commit a64ce18594531bb154c75257f6bcc30a4b1dfafd
+Author: Philippe Thierry <phil@reseau-libre.net>
+Date:   Tue Aug 28 15:38:29 2012 +0200
+
+    add first release of multi mode policy set (first user/last user/all users). config file is updated.
+
+commit 5773c9111004eafc817fadd667e09ec5c4538236
+Author: Philippe Thierry <phil@reseau-libre.net>
+Date:   Tue Jul 31 15:41:33 2012 +0200
+
+    add first content for multiple local user support. The goal is to have a correct behaviour when multiple local users log in during the same session time.
+
+commit 65e06bd63da4f54d7495d16e372f3c85c6307528
+Author: Philippe Thierry <phil@reseau-libre.net>
+Date:   Tue Jul 31 15:03:10 2012 +0200
+
+    add proper session close supporting multi-logging. Updated ChangeLog
+
 commit 9fc1c8fc8374111bd49c5edaf9a3e341330dce1f
 Author: Philippe Thierry <phil@reseau-libre.net>
 Date:   Tue Jul 31 14:50:43 2012 +0200

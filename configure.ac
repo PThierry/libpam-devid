@@ -36,9 +36,9 @@ AC_HEADER_STDC
 ## Init static and shared lib support
 #############################################################################
 # support for static lib
-AC_PROG_RANLIB
+LT_INIT
 
-# FIXME : add shared lib support
+AC_CONFIG_MACRO_DIR([m4])
 
 
 #############################################################################
@@ -62,6 +62,20 @@ else
 	efence="no";
 fi
 
+#############################################################################
+AC_ARG_WITH(module, [  --with-module           Link with the given policy injection module (default is modudev) ])
+if test ! -z "$with_module"
+then
+        modulefile="mod_${module}.c"
+else
+	modulefile="mod_udev.c"
+fi
+
+case $modulefile in
+       mod_udev.c) PAM_DEVID_MOD='mod_udev.$(OBJEXT)' ;;
+       *)       PAM_DEVID_MOD='mod_sample.$(OBJEXT)' ;;
+esac
+AC_SUBST([PAM_DEVID_MOD])
 
 #############################################################################
 ## Third part programs detection

@@ -28,6 +28,8 @@
 /* for utmp */
 #include <utmp.h>
 
+#include "pam_mod_api.h"
+
 PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
                                    int          flags,
                                    int          argc,
@@ -425,6 +427,7 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
   int  res;
   LDAPMessage *entry = NULL;
   struct berval **entryval;
+  const char *device = NULL;
 
   ldap_filter = malloc(128);
   snprintf(ldap_filter, 127, "(%s=%s)", pam_args->ldap_login_attr, name);
@@ -494,6 +497,9 @@ static int request_devid_from_ldap(pam_handle_t *pamh,
       goto nodata;
     }
   }
+  /* uid is in allowed block. Get allowed devices */
+  __push_device(pamh, name, device);
+  /* finished */
   ldap_msgfree(msg);
   /* unbind from LDAP server */
   res = ldap_unbind_ext(ld, NULL, NULL);
@@ -664,9 +670,11 @@ end:
 
 static void clean_policy(pam_handle_t *pamh, const char * name)
 {
-  pamh = pamh;
-  name = name;
-
+  /*
+  ** call underlying policy management module, depending on the configuration
+  ** (check configure --help)
+  */
+  __clean_policy(pamh, name);
 }
 
 /*!
