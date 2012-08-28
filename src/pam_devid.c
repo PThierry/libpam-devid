@@ -54,6 +54,19 @@ union u_foo {
   char **attr;
 };
 
+/** @brief user management tristate value. Specify how multi-user local logins should be managed */
+enum user_tristate
+{
+  USER_FIRST_LOGGED = 1, /**< the first local user logged in get the policy. No other policy is added while at least one local user exists */
+  USER_MERGE, /**< merge any new local user policy to the existing one. All local users have their device(s) allowed */
+  USER_LAST_LOGGED, /**< Each time a new user log in localy, the policy is set to support his devices exclusively */
+  USER_MAX /**< First invalid value */
+};
+
+typedef enum user_tristate user_tristate_t;
+
+
+
 #define MODNAME "pam-devid"
 
 /* module configuration structure, loaded from file given in mod arg or in /etc/pam_devid.conf if not given */
@@ -85,7 +98,7 @@ struct pam_devid_conf {
   bool pam_conf_loaded; /**< set to true when this structure is completely loaded */
   uid_t pam_min_uid; /**< minimum uid for requesting devid in LDAP */
   uid_t pam_max_uid; /**< maximum uid for requesting devid in LDAP */
-  bool pam_one_user; /**< set to True if local user concurrency is disabled */
+  user_tristate_t pam_user_mgmt; /**< set to True if local user concurrency is disabled */
 };
 
 typedef struct pam_devid_conf pam_devid_config_t;
@@ -348,11 +361,8 @@ static int load_configuration(pam_handle_t *pamh,
         config->pam_debug = true;
       else
         config->pam_debug = false;
-    } else if (!strcasecmp(k, "pam_one_local_user")) {
-      if (!strcasecmp (v, "on") || !strcasecmp (v, "yes") || !strcasecmp (v, "true"))
-        config->pam_one_user = true;
-      else
-        config->pam_one_user = false;
+    } else if (!strcasecmp(k, "pam_user_mgmt")) {
+      config->pam_user_mgmt = (user_tristate_t)atol(v);
     }
   } /* end of while() */
   /* okay no check that all necessary configuration data is set */
@@ -588,6 +598,30 @@ end:
 }
 
 /*!
+ ** @brief is_last_logout specify if the given user id being logged out is currently closing its last session.
+ ** 
+ ** If the currently closed session is the last one of the given user, then
+ ** return 1.
+ **
+ ** @param name the user name
+ ** @param pamh the current module pam handler
+ ** 
+ ** @return 1 or 0
+ */
+static int is_last_logout(const char *name, pam_handle_t *pamh)
+{
+  int sesscount;
+  int res = 0;
+
+  if ((sesscount = is_already_logged(name, pamh)) > 1) {
+    pam_syslog(pamh, LOG_INFO, "there is %d other opened sessions for user %s. ACL not cleaned.", sesscount, name);
+  } else {
+    res = 1;
+  }
+  return res;
+}
+
+/*!
  ** @brief other_local_user_logged check if there is other local user(s) already logged in locally
  ** 
  ** @param name the user name, given by PAM
@@ -626,6 +660,13 @@ static int other_local_user_logged(const char *name, pam_handle_t *pamh)
   close(fd);
 end:
   return val;
+}
+
+static void clean_policy(pam_handle_t *pamh, const char * name)
+{
+  pamh = pamh;
+  name = name;
+
 }
 
 /*!
@@ -678,11 +719,26 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
       pam_set_data(pamh, MODNAME, (void**)&module_ctx, cleanup_mod_ctx);
       data = &module_ctx;
     }
-    if (module_ctx->config.pam_one_user && other_local_user_logged(name, pamh)) {
-      /* if another local user exists, ignore the current one */
-      ;
-    } else {
-      /* otherwise, push current user's ACL */
+    if (module_ctx->config.pam_user_mgmt == USER_FIRST_LOGGED) {
+      if (!other_local_user_logged(name, pamh)) {
+        clean_policy(pamh, NULL);
+        request_devid_from_ldap(pamh, name, argc, argv, data);
+      } else {
+        /*
+        ** if another local user exists, ignore the current one. While a local
+        ** user exists, the policy is unchanged. All users need to log out
+        ** before loading a new policy
+        */
+        pam_syslog(pamh, LOG_INFO, "at least one previously logged in user exists. Policy not modified");
+      }
+    } else if (module_ctx->config.pam_user_mgmt == USER_MERGE) {
+      /* merge currently logging in user policy with possible current one */
+      request_devid_from_ldap(pamh, name, argc, argv, data);
+    } else if (module_ctx->config.pam_user_mgmt == USER_LAST_LOGGED) {
+      /*
+      ** New user is logging in. Clean old config and load new one.
+      */
+      clean_policy(pamh, NULL);
       request_devid_from_ldap(pamh, name, argc, argv, data);
     }
   }
@@ -713,7 +769,6 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
   int devid_res = PAM_SERVICE_ERR;
   int ctx_res;
   const void *data;
-  int sesscount;
 
   ctx_res = pam_get_data(pamh, MODNAME, &data);
   if (ctx_res == PAM_NO_MODULE_DATA) { // no data found ?!?
@@ -727,11 +782,9 @@ PAM_EXTERN int pam_sm_close_session(pam_handle_t *pamh,
   }
   pam_syslog(pamh, LOG_INFO, "user %s session closed", name);
   /* if there is more than one currently opened local sessions, then ACL are maintained */
-  if ((sesscount = is_already_logged(name, pamh)) > 1) {
-    pam_syslog(pamh, LOG_INFO, "there is %d other opened sessions for user %s. ACL not cleaned.", sesscount, name);
-  } else {
-    // clean ACL for current user (FIXME: not yet supporting multiple local users management - see pam_one_local_user option)
-    ;
+  if (is_last_logout(name, pamh)) {
+    // clean ACL for current user (FIXME: not yet supporting multiple local users management - see pam_user_mgmt option)
+    clean_policy(pamh, name);
   }
   /*
   ** Okay nothing is done here. We need to manage session counter in order to

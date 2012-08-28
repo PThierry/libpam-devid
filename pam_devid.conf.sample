@@ -145,12 +145,13 @@ pam_sasl_mech simple
 # type: 
 debug on
 
-# name pam_one_local_user
-# description: specify if te ACL is set for the first currently logged in local user. 
-#  If set to yes, the ACL for the first currently logged in user is maintained
-#  even if others local users log in. Otherwise, the last locally logged in
-#  user gets its ACL set, other previously logged local users ACL are cleaned
-#  value should be one of 'on', 'true', 'off', 'false'.
-# example: pam_one_local_user off
-# default: off
-pam_one_local_user on
+# name pam_user_mgmt
+# description: specify if te ACL is set for:
+# - no user. No device is allowed (option should be set to 0)
+# - the first currently logged in local user (option should be set to 1)
+# - all the locally logged user, merging policies (option should be set to 2)
+# - the last currently logged in local user (option should be set to 3)
+# example: pam_user_mgmt 2
+# default: 0, no device allowed.
+pam_user_mgmt 1
+
