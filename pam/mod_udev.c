@@ -9,6 +9,11 @@
 
 #include "pam_mod_api.h"
 
+int __init_module(void)
+{
+  return 0;
+}
+
 int __push_device(pam_handle_t *pamh __attribute__((unused)),
                   const char *name __attribute__((unused)),
                   const char*device __attribute__((unused)))
@@ -22,4 +27,9 @@ void __clean_policy(pam_handle_t *pamh __attribute__((unused)),
   /* open daemon socket */
   /* request for policy clean for given user */
   /* close policy */
+}
+
+int __release_module(void)
+{
+  return 0;
 }

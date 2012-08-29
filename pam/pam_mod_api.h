@@ -22,8 +22,12 @@
 #include <security/pam_modules.h>
 #include <security/pam_ext.h>
 
+int __init_module(void);
+
 int __push_device(pam_handle_t *pamh, const char *name, const char*device);
 
 void __clean_policy(pam_handle_t *pamh, const char *name);
+
+int __release_module(void);
 
 #endif /* !PAM_MOD_UDEV_H_ */

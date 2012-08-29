@@ -18,8 +18,8 @@ moduledir = @PAM_MODDIR@
 module_LTLIBRARIES = pam_devid.la
 
 pam_devid_la_SOURCES = pam_devid.c
-EXTRA_pam_devid_la_SOURCES = mod_udev.c
-pam_devid_la_CFLAGS = ${AM_CFLAGS}
+EXTRA_pam_devid_la_SOURCES = mod_udev.c mod_sample.c
+pam_devid_la_CFLAGS = ${AM_CFLAGS} -fPIC
 pam_devid_la_LDFLAGS = -module -avoid-version
 pam_devid_la_DEPENDENCIES = $(PAM_DEVID_MOD)
 pam_devid_la_LIBADD = $(PAM_DEVID_MOD) -lldap

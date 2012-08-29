@@ -290,8 +290,8 @@ moduledir = @PAM_MODDIR@
 #noinst_HEADERS = pam_mod_api.h
 module_LTLIBRARIES = pam_devid.la
 pam_devid_la_SOURCES = pam_devid.c
-EXTRA_pam_devid_la_SOURCES = mod_udev.c
-pam_devid_la_CFLAGS = ${AM_CFLAGS}
+EXTRA_pam_devid_la_SOURCES = mod_udev.c mod_sample.c
+pam_devid_la_CFLAGS = ${AM_CFLAGS} -fPIC
 pam_devid_la_LDFLAGS = -module -avoid-version
 pam_devid_la_DEPENDENCIES = $(PAM_DEVID_MOD)
 pam_devid_la_LIBADD = $(PAM_DEVID_MOD) -lldap $(am__append_1)
@@ -389,6 +389,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pam_devid_la-mod_sample.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pam_devid_la-mod_udev.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pam_devid_la-pam_devid.Plo@am__quote@
 
@@ -426,6 +427,13 @@ pam_devid_la-mod_udev.lo: mod_udev.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	source='mod_udev.c' object='pam_devid_la-mod_udev.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pam_devid_la_CFLAGS) $(CFLAGS) -c -o pam_devid_la-mod_udev.lo `test -f 'mod_udev.c' || echo '$(srcdir)/'`mod_udev.c
+
+pam_devid_la-mod_sample.lo: mod_sample.c
+@am__fastdepCC_TRUE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pam_devid_la_CFLAGS) $(CFLAGS) -MT pam_devid_la-mod_sample.lo -MD -MP -MF $(DEPDIR)/pam_devid_la-mod_sample.Tpo -c -o pam_devid_la-mod_sample.lo `test -f 'mod_sample.c' || echo '$(srcdir)/'`mod_sample.c
+@am__fastdepCC_TRUE@	$(am__mv) $(DEPDIR)/pam_devid_la-mod_sample.Tpo $(DEPDIR)/pam_devid_la-mod_sample.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	source='mod_sample.c' object='pam_devid_la-mod_sample.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(LIBTOOL)  --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pam_devid_la_CFLAGS) $(CFLAGS) -c -o pam_devid_la-mod_sample.lo `test -f 'mod_sample.c' || echo '$(srcdir)/'`mod_sample.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

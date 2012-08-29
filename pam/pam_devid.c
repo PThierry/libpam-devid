@@ -709,6 +709,8 @@ PAM_EXTERN int pam_sm_open_session(pam_handle_t *pamh,
     /* first load module data. If inexistent, fulfill and load it */
     ctx_res = pam_get_data(pamh, MODNAME, &data);
     if (ctx_res == PAM_NO_MODULE_DATA) { // no data for now, create new context
+      /* initialize the pam_mod_xxx submodule */
+      __init_module();
       module_ctx = malloc(sizeof(struct pam_module_ctx));
       if (NULL == module_ctx) {
         pam_syslog(pamh, LOG_ERR, "error during the allocation of module context");
