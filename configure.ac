@@ -46,6 +46,7 @@ AC_CONFIG_MACRO_DIR([m4])
 #############################################################################
 AC_CHECK_LIB(pam, pam_get_item, [], AC_MSG_ERROR([Cannot find libpam library ! Check your installation !]), [])
 AC_CHECK_HEADER([security/pam_modules.h],,AC_MSG_ERROR([Cannot find security/pam_modules.h ! Check your installation !]))
+AC_CHECK_HEADER([ldap.h],,AC_MSG_ERROR([Cannot find ldap.h ! Check your installation !]))
 
 #############################################################################
 ## Libraries check
