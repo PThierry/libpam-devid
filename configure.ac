@@ -3,7 +3,7 @@
 ## configure.ac for libpam-devid in /home/phil/Travail/Development/Pam/libpam-devid
 ##
 ## Made by Philippe THIERRY
-## Login   <Philippe.THIERRY@thalesgroup.com>
+## Login   <Philippe.THIERRY@reseau-libre.net>
 ##
 ## Started on  mer. 20 juin 2012 15:22:36 CEST Philippe THIERRY
 ## Last update mer. 20 juin 2012 15:22:36 CEST Philippe THIERRY
@@ -13,7 +13,7 @@
 #############################################################################
 ## Preambule
 #############################################################################
-AC_INIT([pam-devid], [0.3], [philippe.thierry@thalesgroup.com], [Philippe THIERRY])
+AC_INIT([pam-devid], [0.3], [philippe.thierry@reseau-libre.net], [Philippe THIERRY])
 AM_INIT_AUTOMAKE([1.9.5 foreign dist-bzip2 no-dist-gzip foreign])
 AC_CONFIG_SRCDIR([pam/pam_devid.c])
 AM_CONFIG_HEADER(pam/config.h)

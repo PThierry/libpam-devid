@@ -2,7 +2,7 @@
 ** pam_mod_udev.c for libpam_devid in libpam-devid/src
 **
 ** Made by Philippe THIERRY
-** Login   <Philippe.thierry@thalesgroup.com>
+** Login   <Philippe.thierry@reseau-libre.net>
 **
 ** Started on  mar. 28 août 2012 15:46:08 CEST Philippe THIERRY
 */

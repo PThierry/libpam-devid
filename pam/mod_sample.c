@@ -2,7 +2,7 @@
 ** mod_sample.c for pam_devid in libpam-devid/pam
 **
 ** Made by Philippe THIERRY
-** Login   <Philippe.THIERRY@thalesgroup.com>
+** Login   <Philippe.THIERRY@reseau-libre.net>
 **
 ** Started on  mer. 29 août 2012 10:54:11 CEST Philippe THIERRY
 */

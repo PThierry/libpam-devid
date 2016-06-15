@@ -2,7 +2,7 @@
 ** main.c for kdevid in /home/phil/Travail/Development/Pam/libpam-devid/kdevid
 **
 ** Made by Philippe THIERRY
-** Login   <Philippe.THIERRY@thalesgroup.com>
+** Login   <Philippe.THIERRY@reseau-libre.net>
 **
 ** Started on  mar. 28 août 2012 17:30:45 CEST Philippe THIERRY
 */

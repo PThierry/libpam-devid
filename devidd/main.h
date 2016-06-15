@@ -2,7 +2,7 @@
 ** main.h for devidd in libpam-devid/devidd
 **
 ** Made by Philippe THIERRY
-** Login   <Philippe.THIERRY@thalesgroup.com>
+** Login   <Philippe.THIERRY@reseau-libre.net>
 **
 ** Started on  mer. 29 août 2012 10:18:50 CEST Philippe THIERRY
 */
